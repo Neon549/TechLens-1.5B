@@ -1,0 +1,36 @@
+### SFT: Qwen3-4B-Instruct-2507 + LoRA（5070 Ti 16GB本地可跑）
+model_name_or_path: Qwen/Qwen3-4B-Instruct-2507
+trust_remote_code: true
+
+stage: sft
+do_train: true
+finetuning_type: lora
+quantization_bit: 4    # 4B用QLoRA省显存
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target: all
+
+dataset: techlens_sft
+dataset_dir: ../../data/train
+template: qwen3
+cutoff_len: 2048
+train_on_prompt: false          # Response-only loss：只对输出JSON计损（关键）
+preprocessing_num_workers: 4
+
+output_dir: ../../models/adapters/qwen3-4b-sft
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 1.0e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+logging_steps: 10
+save_steps: 200
+plot_loss: true
+
+val_size: 0.1
+eval_strategy: steps
+eval_steps: 100
+per_device_eval_batch_size: 4

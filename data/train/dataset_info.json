@@ -1,0 +1,20 @@
+{
+ "techlens_sft": {
+  "file_name": "sft_train.json",
+  "columns": {
+   "prompt": "instruction",
+   "query": "input",
+   "response": "output"
+  }
+ },
+ "techlens_dpo": {
+  "file_name": "dpo_train.json",
+  "ranking": true,
+  "columns": {
+   "prompt": "instruction",
+   "query": "input",
+   "chosen": "chosen",
+   "rejected": "rejected"
+  }
+ }
+}

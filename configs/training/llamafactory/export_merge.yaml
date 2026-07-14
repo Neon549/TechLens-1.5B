@@ -1,0 +1,7 @@
+model_name_or_path: D:/models/models/Qwen--Qwen3-1.7B/snapshots/master
+adapter_name_or_path: D:/code/ProjectExample/TechLens-1.5B/models/adapters/techlens-1.7b-dpo
+template: qwen3
+trust_remote_code: true
+export_dir: D:/code/ProjectExample/TechLens-1.5B/models/merged/techlens-1.7b
+export_size: 2
+export_legacy_format: false

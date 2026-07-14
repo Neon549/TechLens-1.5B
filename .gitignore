@@ -1,0 +1,10 @@
+﻿models/
+experiments/
+__pycache__/
+*.pyc
+.env
+run_baseline.py
+run_sft_eval.py
+run_dpo_eval.py
+run_quant_eval.py
+debug_output.py

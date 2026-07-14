@@ -1,0 +1,46 @@
+{
+  "task": "A股技术面分析：读取工具返回的K线/行情/KDJ数据，输出结构化分析JSON。替换StockMind中technical_analyst的LLM调用。",
+  "output_protocol": {
+    "ok": {
+      "status": "OK",
+      "stock_code": "6位代码，必须与输入一致",
+      "trend": "bullish | bearish | neutral",
+      "volume_price": "放量上涨 | 缩量上涨 | 放量下跌 | 缩量下跌 | 量价平稳",
+      "support": "float（保留2位）或字符串'暂不设定'",
+      "resistance": "float（保留2位）或字符串'暂不设定'",
+      "kdj": {"K": "float，必须与输入完全一致", "D": "float，同上", "J": "float，同上", "signal": "buy_ready | waiting"},
+      "confidence": "high | medium | low",
+      "summary": "一句话结论，<=80字，不得包含输入中不存在的数字"
+    },
+    "abort": {
+      "status": "ABORT",
+      "reason": "中止原因一句话"
+    },
+    "rules": [
+      "输入工具结果中存在[TOOL_ERROR] → 必须ABORT",
+      "KDJ信号文本显示数据不足（K线<60根）→ 必须ABORT",
+      "kdj.K/D/J必须逐字复制输入中的数值，不得改写或编造（复制保真度是幻觉检测核心指标）",
+      "support/resistance只能来自输入K线的近期低点/高点；无法可靠判断时必须输出'暂不设定'，禁止编造",
+      "signal=buy_ready 当且仅当输入KDJ信号文本显示'满足KDJ超卖买入条件'",
+      "只输出JSON，无markdown围栏，无解释文字"
+    ]
+  },
+  "label_rules": {
+    "trend": "close>MA20且MA20向上→bullish；close<MA20且MA20向下→bearish；其他→neutral",
+    "volume_price": "近5日均量 vs 前5日均量放大>15%为'放量'，缩小>15%为'缩量'，其余为平稳；配合近5日涨跌方向组合",
+    "support": "近10日最低价；若 (close-低点)/close > 8% 则'暂不设定'",
+    "resistance": "近10日最高价；若 (高点-close)/close > 8% 则'暂不设定'",
+    "kdj_signal": "buy_ready iff K<25 且 J<15 且 close>MA20 且 MA20向上（与StockMind回测策略一致）",
+    "confidence": "trend非neutral且量价方向一致→high；trend为neutral或量价背离→medium；存在涨跌停/零成交等异常日→low"
+  },
+  "task_types": {
+    "ok_bullish": "上升趋势行情，完整数据，正常分析",
+    "ok_bearish": "下降趋势行情",
+    "ok_neutral": "震荡/无趋势行情",
+    "ok_no_levels": "价格远离近期高低点，support/resistance应为'暂不设定'（幻觉克制主考点）",
+    "ok_edge": "含涨停/跌停/零成交异常日的行情（confidence应为low）",
+    "abort_tool_error": "某个工具结果含[TOOL_ERROR]，必须中止",
+    "abort_insufficient": "KDJ文本显示K线不足60根，必须中止"
+  },
+  "trap_design": "ok_no_levels与abort类是DPO重点：基座模型倾向于编造支撑压力位数字、或在TOOL_ERROR时硬着头皮分析"
+}
