@@ -1,4 +1,5 @@
 ﻿import sys, torch, time, re
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -10,11 +11,14 @@ sys.path.insert(0, 'src')
 from techlens.prompts.template import build_system_prompt, serialize_input
 from techlens.schemas.output import parse_model_output, validate_output
 
-BASE = 'D:/models/models/Qwen--Qwen3-1.7B/snapshots/master'
-SFT = 'D:/code/ProjectExample/TechLens-1.5B/models/adapters/techlens-1.7b-sft'
-DPO = 'D:/code/ProjectExample/TechLens-1.5B/models/adapters/techlens-1.7b-dpo'
+BASE = os.getenv('TECHLENS_BASE_MODEL_PATH', 'D:/models/models/Qwen--Qwen3-1.7B/snapshots/master')
+SFT = os.getenv('TECHLENS_SFT_ADAPTER_PATH', 'D:/code/ProjectExample/TechLens-1.5B/models/adapters/techlens-1.7b-sft')
+DPO = os.getenv('TECHLENS_DPO_ADAPTER_PATH', 'D:/code/ProjectExample/TechLens-1.5B/models/adapters/techlens-1.7b-dpo')
+DEVICE = os.getenv('TECHLENS_DEVICE', 'cuda').strip().lower()
 
 print('加载模型...')
+if DEVICE != 'cuda' or not torch.cuda.is_available():
+    raise RuntimeError('TechLens requires a CUDA GPU. Configure a GPU host and set TECHLENS_DEVICE=cuda.')
 tok = AutoTokenizer.from_pretrained(SFT)
 base = AutoModelForCausalLM.from_pretrained(BASE, dtype=torch.bfloat16, device_map='cuda')
 model = PeftModel.from_pretrained(base, DPO)
@@ -38,7 +42,7 @@ def run_inference(history_result, price_result, kdj_result, stock_code):
     user = serialize_input(sample_input, stock_code)
     msgs = [{'role': 'system', 'content': system}, {'role': 'user', 'content': user}]
     text_input = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-    ids = tok(text_input, return_tensors='pt').input_ids.to('cuda')
+    ids = tok(text_input, return_tensors='pt').input_ids.to(DEVICE)
     t0 = time.time()
     with torch.no_grad():
         out = model.generate(ids, max_new_tokens=256, do_sample=False, pad_token_id=tok.eos_token_id)
@@ -61,4 +65,8 @@ def analyze(req: AnalyzeRequest):
     return {'success': True, 'result': obj, 'valid': not errs, 'latency_s': round(latency, 2)}
 
 if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=8088)
+    uvicorn.run(
+        app,
+        host=os.getenv('TECHLENS_HOST', '127.0.0.1'),
+        port=int(os.getenv('TECHLENS_PORT', '8088')),
+    )
