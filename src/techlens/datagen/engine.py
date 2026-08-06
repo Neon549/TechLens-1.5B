@@ -115,11 +115,12 @@ def _template_summary(trend, volume_price, buy_ready) -> str:
 
 def render_tool_results(k: dict, ind: dict, stock_code: str,
                         inject_tool_error: str | None = None,
-                        insufficient: bool = False) -> dict:
+                        insufficient: bool = False,
+                        dates: list[str] | None = None) -> dict:
     """渲染成与akshare_tools输出一致的文本。返回三段工具结果。"""
     df = ind["df"]
     n = len(df)
-    dates = [f"2026-{4 + i // 22:02d}-{(i % 22) + 1:02d}" for i in range(n)]
+    dates = dates or [f"2026-{4 + i // 22:02d}-{(i % 22) + 1:02d}" for i in range(n)]
 
     if inject_tool_error == "history":
         history = f"[TOOL_ERROR]\ntool=get_stock_history\nsymbol={stock_code}\nAKShare 与 yfinance 均未获取到历史数据"
@@ -203,6 +204,24 @@ def generate_sample(task_type: str, seed: int) -> dict:
             tags.append("买入信号")
         if "暂不设定" in (expected["support"], expected["resistance"]):
             tags.append("价位克制")
+
+    elif task_type.startswith("request_"):
+        k = simulate_kline("neutral", days=90, seed=seed)
+        ind = calc_indicators(k)
+        tools = render_tool_results(k, ind, stock_code)
+        tool_by_type = {
+            "request_history": "get_stock_history",
+            "request_price": "get_stock_price",
+            "request_kdj": "get_kdj_signal",
+        }
+        missing_tool = tool_by_type[task_type]
+        input_key = {"get_stock_history": "history", "get_stock_price": "price",
+                     "get_kdj_signal": "kdj"}[missing_tool]
+        tools[input_key] = f"[TOOL_MISSING] tool={missing_tool} symbol={stock_code}"
+        expected = {"status": "TOOL_REQUEST", "tool_name": missing_tool,
+                    "arguments": {"stock_code": stock_code},
+                    "reason": f"{missing_tool}结果缺失，需要先调用该工具"}
+        tags = ["工具请求", missing_tool]
 
     elif task_type == "abort_tool_error":
         k = simulate_kline("neutral", days=90, seed=seed)

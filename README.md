@@ -61,7 +61,7 @@ TechLens 的数据完全程序化生成：
 TechLens FastAPI Service
         ├── 输入：history_result + price_result + kdj_result + stock_code
         ├── 推理：Qwen3-1.7B + DPO LoRA Adapter
-        └── 输出：结构化 JSON（status=OK/ABORT）
+        └── 输出：结构化 JSON（status=OK/TOOL_REQUEST/ABORT）
                 ↓ 失败时自动降级
         DeepSeek 云端 API（兜底）
 ```
@@ -114,10 +114,14 @@ TechLens FastAPI Service
 - `gen_data.py` 运行时自动切割，物理写入 `data/eval/test.jsonl`
 - 脚本有冻结保护：文件存在时拒绝覆盖，防止无意间重建污染基准
 
+补充了独立的真实行情评估集：`data/eval/real_test_v2.jsonl`。它基于 10 只 A 股在 2018-01-01 至 2026-01-01 的公开日线，以真实 OHLCV 重新计算标签；`bullish`、`bearish`、`neutral`、`no_levels`、`edge` 五类各 24 条，共 **120 条**，每类按股票 round-robin 覆盖 10 只股票。运行 `python scripts/freeze_real_eval.py` 可复现生成逻辑；冻结文件不会被脚本覆盖。
+
 ### 4.3 SFT/DPO 数据
 
 - **SFT**：1790 条，alpaca 格式，`data/train/sft_train.json`
 - **DPO**：400 对 chosen/rejected，`data/train/dpo_train.json`
+
+已有实验记录的 30 条 M2 子集显示，分类错误主要是 `volume_price`（15 次）和 `confidence`（6 次）。`reports/m2_dpo_error_profile.json` 保存该聚合诊断，`data/train/dpo_targeted_train.json` 保存新生成的 400 对修复数据（量价 286 对、置信度 114 对）。这批训练对只来自 `data/train/clean.jsonl`，不复制评估输入；由于原始记录仅覆盖 bullish 子集，必须在完整冻结集复评后再决定是否采用。
 
 **DPO 偏好对构造（程序化定向扰动）：**
 
@@ -188,7 +192,9 @@ Epochs: 1
 **全部使用代码断言，零 LLM Judge。**  
 原因：输出是纯结构化 JSON，每个字段的期望值都能写进 `expected`，规则可 100% 覆盖。
 
-### 6.2 四阶段对比结果
+### 6.2 四阶段初步结果（历史 30 条 bullish 子集）
+
+> 该表来自旧脚本的 `limit=30`，并非 210 条完整评估集；它只能说明该子集上的变化，不能作为全分布结论。后续训练统一使用完整的 `test.jsonl`、`tool_request_test.jsonl` 与 `real_test_v2.jsonl` 复评。
 
 | 指标 | M0 基座 | M1 SFT | M2 DPO | M3 INT8量化 |
 |---|---|---|---|---|
@@ -221,6 +227,12 @@ python api_server.py
 接口：
 - `GET /health` → 健康检查
 - `POST /analyze` → 技术面分析
+
+当某段工具结果缺失（请求字段可传 `null`）时，服务会返回合法的 `TOOL_REQUEST` 及 `next_action`；上层 Agent 执行请求的工具后再将完整结果提交。工具返回 `[TOOL_ERROR]` 或 KDJ 数据不足时仍只能返回 `ABORT`，不会硬分析。
+
+### 7.2 GGUF CPU 部署与成本对比
+
+`deployment/llama_cpp/README.md` 提供 LoRA 合并权重到 GGUF Q4_K_M、纯 CPU `llama-server` 启动、完整冻结集基准和成本报告的命令。当前仓库没有可执行的 `llama-server` 或 GGUF 文件，因此尚未记录 CPU P50/P95；不得用 GPU INT8 的 16.6 秒结果冒充 CPU 结果。
 
 ### 7.2 接入 StockMind
 
@@ -306,10 +318,22 @@ python run_dpo_eval.py
 # 10. 合并LoRA权重
 llamafactory-cli export configs/training/llamafactory/export_merge.yaml
 
-# 11. 启动推理服务
+# 11. 构造动作数据与定向 DPO（训练前先全量复评）
+python scripts/build_tool_action_data.py
+python scripts/diagnose_records.py experiments/m2_dpo/records.jsonl --out reports/m2_dpo_error_profile.json
+python scripts/build_targeted_dpo.py --profile reports/m2_dpo_error_profile.json
+llamafactory-cli train configs/training/llamafactory/sft_tool_actions_qwen3_1p7b.yaml
+llamafactory-cli train configs/training/llamafactory/dpo_repair_qwen3_1p7b.yaml
+
+# 12. 冻结真实行情集并启动推理服务
+python scripts/freeze_real_eval.py
 python api_server.py
 
-# 12. 测试接口
+# 13. 回归测试和 CPU GGUF 基准（需已安装 llama.cpp）
+pytest -q
+python scripts/benchmark_llama_cpp.py --eval data/eval/real_test_v2.jsonl --out experiments/m4_gguf_cpu
+
+# 14. 测试接口
 curl http://localhost:8088/health
 ```
 

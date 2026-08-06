@@ -74,5 +74,11 @@ def create_backend(config: dict) -> InferenceBackend:
         return MockBackend(mode=config.get("mode", "gold"),
                            noise_rate=config.get("noise_rate", 0.3), seed=config.get("seed", 0))
     if kind == "llama_server":
-        return LlamaServerBackend(base_url=config.get("base_url", "http://127.0.0.1:8080"))
+        return LlamaServerBackend(
+            base_url=config.get("base_url", "http://127.0.0.1:8080"),
+            model=config.get("model", "techlens"),
+            temperature=config.get("temperature", 0.0),
+            max_tokens=config.get("max_tokens", 384),
+            timeout=config.get("timeout", 120),
+        )
     raise ValueError(f"unknown backend kind: {kind}")

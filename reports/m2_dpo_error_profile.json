@@ -1,0 +1,16 @@
+{
+  "records_path": "experiments/m2_dpo/records.jsonl",
+  "n_records": 30,
+  "task_type_counts": {
+    "ok_bullish": 30
+  },
+  "field_failures": {
+    "volume_price": 15,
+    "confidence": 6
+  },
+  "limitations": [
+    "该画像只表示被评估模型在该 records 文件中的失败模式。",
+    "若 n_records 或任务类型覆盖不足，必须先运行完整冻结评估再作为训练依据。",
+    "画像只提供字段级聚合统计；定向 DPO 只能使用训练集样本。"
+  ]
+}

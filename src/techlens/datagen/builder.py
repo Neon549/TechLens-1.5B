@@ -56,6 +56,52 @@ def build_dpo_pair(sample: dict, rng: random.Random) -> dict | None:
     }
 
 
+def _targeted_rejected(sample: dict, field: str) -> dict:
+    """构造与已观测错误同型的 rejected，不引用评估样本的内容。"""
+    out = copy.deepcopy(sample["expected"])
+    if field == "volume_price":
+        alternatives = ["放量上涨", "缩量上涨", "放量下跌", "缩量下跌", "量价平稳"]
+        # 真实错误中模型常回退为“量价平稳”；其余情况选该回退值。
+        out["volume_price"] = "量价平稳" if out["volume_price"] != "量价平稳" else "放量上涨"
+    elif field == "confidence":
+        alternatives = ["high", "medium", "low"]
+        out["confidence"] = next(value for value in alternatives if value != out["confidence"])
+    else:
+        raise ValueError(f"unsupported targeted field: {field}")
+    return out
+
+
+def build_targeted_dpo_pairs(clean_jsonl, error_fields: dict[str, int], count=400) -> list[dict]:
+    """由聚合错误画像选择 DPO 扰动类型，避免从评估集复制输入。"""
+    samples = [json.loads(line) for line in Path(clean_jsonl).read_text(encoding="utf-8").splitlines()
+               if line.strip()]
+    ok_samples = [sample for sample in samples if sample["expected"]["status"] == "OK"]
+    supported = {field: n for field, n in error_fields.items()
+                 if field in {"volume_price", "confidence"} and n > 0}
+    if not supported:
+        raise ValueError("error profile has no supported field failures")
+    schedule = []
+    total = sum(supported.values())
+    for field, failures in sorted(supported.items()):
+        schedule.extend([field] * round(count * failures / total))
+    while len(schedule) < count:
+        schedule.append(max(supported, key=supported.get))
+    schedule = schedule[:count]
+
+    pairs = []
+    for index, field in enumerate(schedule):
+        sample = ok_samples[index % len(ok_samples)]
+        rejected = _targeted_rejected(sample, field)
+        pairs.append({
+            "instruction": build_system_prompt(),
+            "input": serialize_input(sample["input"], sample["stock_code"]),
+            "chosen": json.dumps(sample["expected"], ensure_ascii=False),
+            "rejected": json.dumps(rejected, ensure_ascii=False),
+            "metadata": {"targeted_field": field, "source": "train_only"},
+        })
+    return pairs
+
+
 def build_datasets(clean_jsonl, out_dir, dpo_count=400, seed=42):
     rng = random.Random(seed)
     samples = [json.loads(l) for l in Path(clean_jsonl).read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -87,6 +133,9 @@ def build_datasets(clean_jsonl, out_dir, dpo_count=400, seed=42):
         "techlens_dpo": {"file_name": "dpo_train.json", "ranking": True,
                          "columns": {"prompt": "instruction", "query": "input",
                                      "chosen": "chosen", "rejected": "rejected"}},
+        "techlens_dpo_targeted": {"file_name": "dpo_targeted_train.json", "ranking": True,
+                                   "columns": {"prompt": "instruction", "query": "input",
+                                               "chosen": "chosen", "rejected": "rejected"}},
     }
     (out_dir / "dataset_info.json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"sft": len(sft), "dpo": len(pairs)}

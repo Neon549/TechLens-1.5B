@@ -21,6 +21,21 @@ def score_status(obj, parse_err, fenced, sample):
     return {"pass": got == exp, "reason": None if got == exp else f"expected {exp} got {got}"}
 
 
+def score_tool_request(obj, parse_err, fenced, sample):
+    """缺失工具结果时，工具名与股票参数必须精确匹配。"""
+    expected = sample["expected"]
+    if expected["status"] != "TOOL_REQUEST":
+        return {"skip": True}
+    if parse_err or not isinstance(obj, dict) or obj.get("status") != "TOOL_REQUEST":
+        return {"pass": False, "reason": "not_a_tool_request"}
+    checks = {
+        "tool_name": obj.get("tool_name") == expected["tool_name"],
+        "arguments": obj.get("arguments") == expected["arguments"],
+    }
+    wrong = [name for name, passed in checks.items() if not passed]
+    return {"pass": not wrong, "reason": f"wrong:{wrong}" if wrong else None}
+
+
 def score_fidelity(obj, parse_err, fenced, sample):
     """复制保真度：kdj三值+stock_code必须与输入完全一致（幻觉的直接度量）。仅OK样本计入。"""
     if sample["expected"]["status"] != "OK":
@@ -91,6 +106,7 @@ def score_restraint(obj, parse_err, fenced, sample):
 QUALITY_SCORERS = {
     "instruction": score_instruction,
     "status": score_status,
+    "tool_request": score_tool_request,
     "fidelity": score_fidelity,
     "fields": score_fields,
     "levels": score_levels,

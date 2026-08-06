@@ -65,6 +65,7 @@ def build_scorecard(records, model_name, n):
         "quality": {
             "instruction_following": _rate(records, "instruction"),
             "status_accuracy": _rate(records, "status"),
+            "tool_request_accuracy": _rate(records, "tool_request"),
             "copy_fidelity": _rate(records, "fidelity"),
             "fields_exact": _rate(records, "fields"),
             "fields_acc_avg": round(statistics.mean(field_accs), 4) if field_accs else None,
@@ -90,6 +91,7 @@ def render_scorecard(card) -> str:
         "质量角度",
         f"  格式遵循              {pct(q['instruction_following'])}",
         f"  OK/ABORT决策          {pct(q['status_accuracy'])}",
+        f"  工具请求准确率          {pct(q['tool_request_accuracy'])}",
         f"  复制保真度            {pct(q['copy_fidelity'])}   (KDJ三值+代码逐字一致)",
         f"  分类字段全对率        {pct(q['fields_exact'])}   (字段级均值 {q['fields_acc_avg']})",
         f"  价位纪律              {pct(q['levels_discipline'])}   (编造价位率 {pct(q['invented_levels_rate'])})",

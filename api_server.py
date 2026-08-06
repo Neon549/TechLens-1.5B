@@ -1,5 +1,6 @@
 ﻿import sys, torch, time, re
 import os
+from typing import Optional
 from fastapi import FastAPI
 from pydantic import BaseModel
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -28,9 +29,9 @@ print('模型加载完成')
 app = FastAPI(title='TechLens API', description='A股技术面分析本地推理服务')
 
 class AnalyzeRequest(BaseModel):
-    history_result: str
-    price_result: str
-    kdj_result: str
+    history_result: Optional[str] = None
+    price_result: Optional[str] = None
+    kdj_result: Optional[str] = None
     stock_code: str
 
 class StockCodeRequest(BaseModel):
@@ -62,7 +63,12 @@ def analyze(req: AnalyzeRequest):
     if err:
         return {'success': False, 'error': err, 'latency_s': latency}
     errs = validate_output(obj)
-    return {'success': True, 'result': obj, 'valid': not errs, 'latency_s': round(latency, 2)}
+    if errs:
+        return {'success': False, 'result': obj, 'valid': False, 'errors': errs,
+                'latency_s': round(latency, 2)}
+    if obj['status'] == 'TOOL_REQUEST':
+        return {'success': True, 'next_action': obj, 'valid': True, 'latency_s': round(latency, 2)}
+    return {'success': True, 'result': obj, 'valid': True, 'latency_s': round(latency, 2)}
 
 if __name__ == '__main__':
     uvicorn.run(

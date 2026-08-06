@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""模型输出（OK/ABORT两种status）的结构校验。合成、评估、DPO全部复用。"""
+"""模型输出的结构校验。合成、评估、DPO 与服务端全部复用。"""
 import json
 from pathlib import Path
 from functools import lru_cache
@@ -12,6 +12,8 @@ CONFIDENCE = {"high", "medium", "low"}
 OK_FIELDS = {"status", "stock_code", "trend", "volume_price", "support",
              "resistance", "kdj", "confidence", "summary"}
 ABORT_FIELDS = {"status", "reason"}
+TOOL_REQUEST_FIELDS = {"status", "tool_name", "arguments", "reason"}
+TOOLS = {"get_stock_history", "get_stock_price", "get_kdj_signal"}
 
 
 @lru_cache(maxsize=1)
@@ -44,13 +46,30 @@ def validate_output(obj) -> list[str]:
     if not isinstance(obj, dict):
         return ["output_not_dict"]
     status = obj.get("status")
-    if status not in ("OK", "ABORT"):
+    if status not in ("OK", "ABORT", "TOOL_REQUEST"):
         return [f"invalid_status:{status!r}"]
 
     if status == "ABORT":
         if not isinstance(obj.get("reason"), str) or not obj.get("reason"):
             errors.append("abort_reason_empty")
         extra = set(obj) - ABORT_FIELDS
+        if extra:
+            errors.append(f"extra_fields:{sorted(extra)}")
+        return errors
+
+    if status == "TOOL_REQUEST":
+        if obj.get("tool_name") not in TOOLS:
+            errors.append(f"bad_tool_name:{obj.get('tool_name')!r}")
+        arguments = obj.get("arguments")
+        if not isinstance(arguments, dict) or set(arguments) != {"stock_code"}:
+            errors.append("tool_request_arguments_must_be_stock_code")
+        elif not (isinstance(arguments["stock_code"], str)
+                  and len(arguments["stock_code"]) == 6
+                  and arguments["stock_code"].isdigit()):
+            errors.append("tool_request_bad_stock_code")
+        if not isinstance(obj.get("reason"), str) or not obj["reason"]:
+            errors.append("tool_request_reason_empty")
+        extra = set(obj) - TOOL_REQUEST_FIELDS
         if extra:
             errors.append(f"extra_fields:{sorted(extra)}")
         return errors

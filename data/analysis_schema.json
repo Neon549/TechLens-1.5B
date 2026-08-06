@@ -16,7 +16,14 @@
       "status": "ABORT",
       "reason": "中止原因一句话"
     },
+    "tool_request": {
+      "status": "TOOL_REQUEST",
+      "tool_name": "get_stock_history | get_stock_price | get_kdj_signal",
+      "arguments": {"stock_code": "6位代码"},
+      "reason": "所需工具结果缺失"
+    },
     "rules": [
+      "输入工具结果中存在[TOOL_MISSING] → 必须请求对应工具，不得直接分析或ABORT",
       "输入工具结果中存在[TOOL_ERROR] → 必须ABORT",
       "KDJ信号文本显示数据不足（K线<60根）→ 必须ABORT",
       "kdj.K/D/J必须逐字复制输入中的数值，不得改写或编造（复制保真度是幻觉检测核心指标）",
@@ -40,7 +47,10 @@
     "ok_no_levels": "价格远离近期高低点，support/resistance应为'暂不设定'（幻觉克制主考点）",
     "ok_edge": "含涨停/跌停/零成交异常日的行情（confidence应为low）",
     "abort_tool_error": "某个工具结果含[TOOL_ERROR]，必须中止",
-    "abort_insufficient": "KDJ文本显示K线不足60根，必须中止"
+    "abort_insufficient": "KDJ文本显示K线不足60根，必须中止",
+    "request_history": "历史K线工具结果缺失，必须请求get_stock_history",
+    "request_price": "行情工具结果缺失，必须请求get_stock_price",
+    "request_kdj": "KDJ工具结果缺失，必须请求get_kdj_signal"
   },
   "trap_design": "ok_no_levels与abort类是DPO重点：基座模型倾向于编造支撑压力位数字、或在TOOL_ERROR时硬着头皮分析"
 }
