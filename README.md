@@ -232,7 +232,7 @@ python api_server.py
 
 ### 7.2 GGUF CPU 部署与成本对比
 
-`deployment/llama_cpp/README.md` 提供 LoRA 合并权重到 GGUF Q4_K_M、纯 CPU `llama-server` 启动、完整冻结集基准和成本报告的命令。当前仓库没有可执行的 `llama-server` 或 GGUF 文件，因此尚未记录 CPU P50/P95；不得用 GPU INT8 的 16.6 秒结果冒充 CPU 结果。
+已在 Intel Core Ultra 9 275HX（24 逻辑核）上完成 llama.cpp b10293 的纯 CPU Q4_K_M 实测：真实行情冻结集 120 条的 P50 **5.720s**、P95 **8.753s**。格式、OK/ABORT 决策和 KDJ 复制均为 100%，但分类字段全对率仅 **26.7%**、价位纪律 **75.8%**（编造价位率 15.0%）；量化模型尚不能替代 DPO BF16 作为生产默认。完整命令、文件哈希与结果见 `reports/m4_cpu_benchmark.md`。
 
 ### 7.2 接入 StockMind
 
